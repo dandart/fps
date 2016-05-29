@@ -32,16 +32,16 @@ class Camera {
                 dy = point[1] - this.y,
                 dz = point[2] - this.z,
 
-                objtx = Math.atan(dx / dz),
-                objty = Math.atan(dy / dz),
+                objtx = Math.atan2(dx, dz) + Math.PI,
+                objty = Math.atan2(dy, dz) + Math.PI,
                 objtz = 0,
 
                 tx = objtx + this.tx,
                 ty = objty + this.ty,
                 tz = this.tz,
 
-                dpx = Math.sin(objtx + this.tx) / Math.sin(this.fov / 2) * (this.h / 2),
-                dpy = Math.sin(objty + this.ty) / Math.sin(this.fov / 2) * (this.h / 2),
+                dpx = (objtx + this.tx) / (this.fov / 2) * (this.h / 2),
+                dpy = (objty + this.ty) / (this.fov / 2) * (this.h / 2),
 
                 px = dpx + this.origin.x,
                 py = this.origin.y - dpy;
