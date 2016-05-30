@@ -3,9 +3,7 @@ let T = 2 * Math.PI,
     h = window.innerHeight,
     w = window.innerWidth,
     angleX = 0,
-    angleY = 0,
-    camera,
-    proj;
+    angleY = 0;
 
 canvas.height = h;
 canvas.width = w;
@@ -27,7 +25,7 @@ let gl = canvas.getContext('webgl'),
     }),
     pVertexText = loadAjax('vertex.v.glsl'),
     pFragmentText = loadAjax('fragment.f.glsl'),
-    pVerticesText = loadAjax('susan.json'),
+    pVerticesText = loadAjax('vinski1.json'),
     clear = () => {
         gl.clearColor(0.5, 0.5, 0.5, 1);
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -38,6 +36,7 @@ let gl = canvas.getContext('webgl'),
         gl.UNSIGNED_SHORT,
         0
     ),
+    program,
     compileProgram = (vertexText, fragmentText) => {
         let vertexShader = gl.createShader(gl.VERTEX_SHADER),
             fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
@@ -57,7 +56,7 @@ let gl = canvas.getContext('webgl'),
             throw new Error('Error compiling fragment shader');
         }
 
-        let program = gl.createProgram();
+        program = gl.createProgram();
 
         gl.attachShader(program, vertexShader);
         gl.attachShader(program, fragmentShader);
@@ -83,7 +82,7 @@ let gl = canvas.getContext('webgl'),
         gl.cullFace(gl.BACK);
         gl.frontFace(gl.CCW);
     },
-    enablePositionBuffer = (program, arrVertices) => {
+    enablePositionBuffer = (arrVertices) => {
         let posVertexBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, posVertexBuffer);
         let positionAttributeLocation = gl.getAttribLocation(program, 'vertPosition');
@@ -97,7 +96,7 @@ let gl = canvas.getContext('webgl'),
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(arrVertices), gl.STATIC_DRAW);
         gl.enableVertexAttribArray(positionAttributeLocation);
     },
-    enableTexCoordBuffer = (program, arrTexCoords) => {
+    enableTexCoordBuffer = (arrTexCoords) => {
         let texCoordBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
         let texCoordAttributeLocation = gl.getAttribLocation(program, 'vertTexCoord');
@@ -111,12 +110,12 @@ let gl = canvas.getContext('webgl'),
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(arrTexCoords), gl.STATIC_DRAW);
         gl.enableVertexAttribArray(texCoordAttributeLocation);
     },
-    enableIndexBuffer = (program, arrIndices) => {
+    enableIndexBuffer = (arrIndices) => {
         let indexBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(arrIndices), gl.STATIC_DRAW);
     },
-    enableNormalBuffer = (program, arrNormals) => {
+    enableNormalBuffer = (arrNormals) => {
         let normalBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
         let normalAttribLocation = gl.getAttribLocation(program, 'vertNormal');
@@ -130,7 +129,7 @@ let gl = canvas.getContext('webgl'),
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(arrNormals), gl.STATIC_DRAW);
         gl.enableVertexAttribArray(normalAttribLocation);
     },
-    enableTexture = (program, texId) => {
+    enableTexture = (texId) => {
         let tex = gl.createTexture();
         gl.bindTexture(gl.TEXTURE_2D, tex);
         gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
@@ -139,44 +138,52 @@ let gl = canvas.getContext('webgl'),
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, document.getElementById(texId))
+        gl.texImage2D(
+            gl.TEXTURE_2D,
+            0,
+            gl.RGBA,
+            gl.RGBA,
+            gl.UNSIGNED_BYTE,
+            document.getElementById(texId)
+        );
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, null);
         return tex;
     },
-    getUL = (program, name) => {
-        try {
-            return gl.getUniformLocation(program, name);
-        } catch (err) {
-            console.log(err.stack);
+    getUL = (name) => gl.getUniformLocation(program, name),
+    setUM4fv = (name, value) => gl.uniformMatrix4fv(getUL(name), gl.FALSE, value),
+    setU3f = (name, x, y, z) => gl.uniform3f(getUL(name), x, y, z),
+    World = class World {
+        constructor() {
+            this.mWorld = mat4.create();
+            mat4.identity(this.mWorld);
+        }
+
+        rotate() {
+            mat4.rotate(this.mWorld, this.mWorld, 0.01, [0, 1, 0]);
+            refresh();
+        }
+
+        getMat4() {
+            return this.mWorld;
+        }
+
+        setMat4(mat4) {
+            this.mWorld = mat4;
         }
     },
-    setUM4fv = (program, name, value) => {
-        try {
-            return gl.uniformMatrix4fv(getUL(program, name), gl.FALSE, value);
-        } catch (err) {
-            console.log(err.stack)
-        }
-    },
-    setU3f = (program, name, x, y, z) => gl.uniform3f(getUL(program, name), x, y, z),
-    enableWorld = (program) => {
-        let mWorld = mat4.create();
-        mat4.identity(mWorld);
-        setUM4fv(program, 'mWorld', mWorld);
-    },
-    enableLights = (program) => {
-        setU3f(program, 'ambientLightIntensity', 0.2, 0.2, 0.2);
-        setU3f(program, 'sun.direction', 3.0, 4.0, -2.0);
-        setU3f(program, 'sun.intensity', 0.9, 0.9, 0.9);
+    world,
+    enableLights = () => {
+        setU3f('ambientLightIntensity', 0.2, 0.2, 0.2);
+        setU3f('sun.direction', 3.0, 4.0, -2.0);
+        setU3f('sun.intensity', 0.9, 0.9, 0.9);
     },
     useTexture = (tex) => {
         gl.bindTexture(gl.TEXTURE_2D, tex);
         gl.activeTexture(gl.TEXTURE0);
     },
     Proj = class Proj {
-        constructor(gl, program, fov = T / 8, aspect = w / h, near = 0.1, far = 1000.0) {
-            this.gl = gl;
-            this.program = program;
+        constructor(fov = T / 8, aspect = w / h, near = 0.1, far = 1000.0) {
             this.fov = fov;
             this.aspect = aspect;
             this.near = near;
@@ -187,103 +194,228 @@ let gl = canvas.getContext('webgl'),
 
         apply() {
             mat4.perspective(this.mProj, this.fov, this.aspect, this.near, this.far);
-            setUM4fv(this.program, 'mProj', this.mProj);
+            refresh();
         }
 
-        getProgram() {
-            return this.program;
+        getMat4() {
+            return this.mProj;
         }
     },
+    proj,
     Camera = class Camera {
-        constructor(gl, program, eye = [0, 0, -5], center = [0, 0, 0]) {
-            this.program = program;
-            this.mView = mat4.create();
-            this.eye = eye;
-            this.center = center;
-            this.up = [0, 1, 0];
+        constructor(position = [0, 0, -5], lookAt = [0, 0, 0], up = [0, 1, 0]) {
+            this.forward = vec3.create();
+            this.up = vec3.create();
+            this.right = vec3.create();
 
-            this.apply();
+            this.position = position;
+
+            this.mView = mat4.create();
+
+            // get what I'm looking at from my perspective
+            vec3.subtract(this.forward, lookAt, this.position);
+            vec3.add(this.up, this.up, up);
+
+            this.renorm();
+
+            this.rotSpeed = 0.001;
+            this.moveSpeed = 0.01;
+            this.slowSpeed = 0.01;
+            this.fastSpeed = 0.02;
+        }
+
+        setFast() {
+            this.moveSpeed = this.fastSpeed;
+        }
+
+        setSlow() {
+            this.moveSpeed = this.slowSpeed;
+        }
+
+        renorm() {
+            vec3.cross(this.right, this.forward, this.up);
+            vec3.cross(this.up, this.right, this.forward);
+
+            vec3.normalize(this.forward, this.forward);
+            vec3.normalize(this.right, this.right);
+            vec3.normalize(this.up, this.up);
+        }
+
+        getMat4() {
+            let lookAt = vec3.create();
+            vec3.add(lookAt, this.position, this.forward);
+            mat4.lookAt(this.mView, this.position, lookAt, this.up);
+            return this.mView;
         }
 
         moveForward() {
-            this.eye[2] += 0.2;
-            this.center[2] += 0.2;
+            vec3.scaleAndAdd(this.position, this.position, this.forward, this.moveSpeed);
             this.apply();
         }
 
         moveBack() {
-            this.eye[2] -= 0.2;
-            this.center[2] -= 0.2;
+            vec3.scaleAndAdd(this.position, this.position, this.forward, -this.moveSpeed);
             this.apply();
         }
 
-        moveLeft() {
-            this.eye[0] += 0.2;
-            this.center[0] += 0.2;
+        strafeLeft() {
+            vec3.scaleAndAdd(this.position, this.position, this.right, -this.moveSpeed);
             this.apply();
         }
 
-        moveRight() {
-            this.eye[0] -= 0.2;
-            this.center[0] -= 0.2;
+        strafeRight() {
+            vec3.scaleAndAdd(this.position, this.position, this.right, this.moveSpeed);
             this.apply();
         }
 
         yawLeft() {
-            this.center[0] -= 0.2;
+            let mRight = mat4.create();
+            mat4.rotate(mRight, mRight, this.rotSpeed, vec3.fromValues(0, 1, 0));
+            vec3.transformMat4(this.forward, this.forward, mRight);
+            this.renorm();
             this.apply();
         }
 
         yawRight() {
-            this.center[0] += 0.2;
+            let mRight = mat4.create();
+            mat4.rotate(mRight, mRight, -this.rotSpeed, vec3.fromValues(0, 1, 0));
+            vec3.transformMat4(this.forward, this.forward, mRight);
+            this.renorm();
             this.apply();
         }
 
         pitchUp() {
-            this.center[1] += 0.2;
+            let mUp = mat4.create();
+            mat4.rotate(mUp, mUp, -this.rotSpeed, vec3.fromValues(1, 0, 0));
+            vec3.transformMat4(this.forward, this.forward, mUp);
+            this.renorm();
             this.apply();
         }
 
         pitchDown() {
-            this.center[1] -= 0.2;
+            let mUp = mat4.create();
+            mat4.rotate(mUp, mUp, this.rotSpeed, vec3.fromValues(1, 0, 0));
+            vec3.transformMat4(this.forward, this.forward, mUp);
+            this.renorm();
+            this.apply();
+        }
+
+        yawAndPitch(x, y) {
+            let mRot = mat4.create();
+            mat4.rotate(mRot, mRot, -this.rotSpeed * x, vec3.fromValues(0, 1, 0));
+            mat4.rotate(mRot, mRot, this.rotSpeed * y, vec3.fromValues(1, 0, 0));
+            vec3.transformMat4(this.forward, this.forward, mRot);
+            this.renorm();
             this.apply();
         }
 
         apply() {
-            mat4.lookAt(this.mView, this.eye, this.center, this.up);
-            setUM4fv(this.program, 'mView', this.mView);
+            refresh();
+        }
+    },
+    camera,
+    ready,
+    refresh = () => {
+        if (!ready) return;
+        let mPos = mat4.create();
+        mat4.identity(mPos);
+        setUM4fv('mWorld', world.getMat4());
+        //setUM4fv('mView', camera.getMat4());
+        //setUM4fv('mProj', proj.getMat4());
+
+        mat4.multiply(mPos, world.getMat4(), mPos);
+        mat4.multiply(mPos, camera.getMat4(), mPos);
+        mat4.multiply(mPos, proj.getMat4(), mPos);
+        setUM4fv('mPos', mPos);
+        return mPos;
+    },
+    Model = class Model {
+        constructor(arrVertices, arrIndices, arrTexCoords, arrNormals, v4Trans) {
+            this.vertices = arrVertices;
+            this.texCoords = arrTexCoords;
+            this.indices = arrIndices;
+            this.normals = arrNormals;
+            this.v4Trans = v4Trans;
         }
 
-        getProgram() {
-            return this.program;
+        use() {
+            enablePositionBuffer(this.vertices);
+            enableTexCoordBuffer(this.texCoords);
+            enableIndexBuffer(this.indices);
+            enableNormalBuffer(this.normals);
         }
-    }
+
+        getVertices() {
+            return this.vertices;
+        }
+
+        getIndices() {
+            return this.indices;
+        }
+
+        getMat4() {
+            return this.v4Trans;
+        }
+    },
+    addObjects = (arr) => {
+        let models = [];
+
+        for (let child of arr.rootnode.children) {
+            console.log('Adding child', child.name);
+            let trans = mat4.fromValues(...child.transformation);
+            console.log(trans)
+
+            if ('undefined' !== typeof child.meshes) {
+                for (let meshId of child.meshes) {
+                    console.log('Needs mesh ID', meshId);
+                    let mesh = arr.meshes[meshId];
+                    console.log('Adding mesh', mesh.name);
+
+                    let model = new Model(
+                        mesh.vertices,
+                        [].concat.apply([], mesh.faces),
+                        mesh.texturecoords[0],
+                        mesh.normals,
+                        trans
+                    );
+                    console.log(trans)
+                    models.push(model);
+                }
+            }
+        }
+        return models;
+    },
     createProgram = (vertexText, fragmentText, verticesText) => {
         let arr = JSON.parse(verticesText),
-            arrVertices = arr.meshes[0].vertices,
-            arrIndices = [].concat.apply([], arr.meshes[0].faces),
-            arrTexCoords = arr.meshes[0].texturecoords[0],
-            arrNormals = arr.meshes[0].normals,
             program = compileProgram(vertexText, fragmentText),
-            tex = enableTexture(program, 'texture');
+            tex = enableTexture('texture');
+
+        let models = addObjects(arr);
+
+        console.log(arr);
 
         applySettings();
-        enablePositionBuffer(program, arrVertices);
-        enableTexCoordBuffer(program, arrTexCoords);
-        enableIndexBuffer(program, arrIndices);
-        enableNormalBuffer(program, arrNormals);
+
         gl.useProgram(program);
-        camera = new Camera(gl, program);
-        program = camera.getProgram();
-        proj = new Proj(gl, program);
-        program = proj.getProgram();
-        enableWorld(program);
-        enableLights(program);
+        camera = new Camera();
+        proj = new Proj();
+        world = new World();
+        enableLights();
+        ready = true;
+        refresh();
 
         loop = () => {
             clear();
             useTexture(tex);
-            draw(arrVertices, arrIndices);
+            for (let model of models) {
+                model.use();
+                //world.setMat4(model.getMat4());
+                refresh();
+
+                draw(model.getVertices(), model.getIndices());
+                keycheck();
+            }
+            //draw(...indsverts);
 
             requestAnimationFrame(loop);
         };
@@ -295,39 +427,43 @@ let gl = canvas.getContext('webgl'),
             pFragmentText,
             pVerticesText
         ]).then((r) => createProgram(...r)).catch((err) => console.log(err));
-    },
-    keypress = (ev) => {
-        switch (ev.key) {
-            case 'w':
-                camera.moveForward();
-                break;
-            case 's':
-                camera.moveBack();
-                break;
-            case 'a':
-                camera.moveLeft();
-                break;
-            case 'd':
-                camera.moveRight();
-                break;
-            case 'ArrowUp':
-                camera.pitchUp();
-                break;
-            case 'ArrowDown':
-                camera.pitchDown();
-                break;
-            case 'ArrowLeft':
-                camera.yawLeft();
-                break;
-            case 'ArrowRight':
-                camera.yawRight();
-                break;
-            default:
-                console.log(ev.key);
-                break;
-        }
 
+        window.addEventListener('keydown', keydown);
+        window.addEventListener('keyup', keyup);
+        canvas.requestPointerLock = canvas.requestPointerLock || canvas.mozRequestPointerLock;
+        canvas.requestPointerLock();
+        window.addEventListener('mousemove', mousemove);
+    },
+    keys = new Set(),
+    keydown = (ev) => keys.add(ev.key.toLowerCase());
+    keyup = (ev) => keys.delete(ev.key.toLowerCase());
+    keycheck = () => {
+        if (keys.has('shift'))
+            camera.setFast();
+        else
+            camera.setSlow();
+
+        if (keys.has('w') && !keys.has('s'))
+            camera.moveForward();
+        if (keys.has('s') && !keys.has('w'))
+            camera.moveBack();
+        if (keys.has('a') && !keys.has('d'))
+            camera.strafeLeft();
+        if (keys.has('d') && !keys.has('a'))
+            camera.strafeRight();
+        if (keys.has('arrowup') && !keys.has('arrowdown'))
+            camera.pitchUp();
+        if (keys.has('arrowdown') && !keys.has('arrowup'))
+            camera.pitchDown();
+        if (keys.has('arrowleft') && !keys.has('arrowright'))
+            camera.yawLeft();
+        if (keys.has('arrowright') && !keys.has('arrowleft'))
+            camera.yawRight()
     };
+    mousemove = (ev) => {
+        ev.movementX = ev.movementX || ev.mozMovementX;
+        ev.movementY = ev.movementY || ev.mozMovementY;
+        camera.yawAndPitch(ev.movementX, ev.movementY);
+    }
 
 load();
-addEventListener('keypress', keypress);
