@@ -1,16 +1,10 @@
 let T = 2 * Math.PI,
     canvas = document.querySelector('canvas'),
-    h = window.innerHeight,
-    w = window.innerWidth,
     angleX = 0,
-    angleY = 0;
-
-canvas.height = h;
-canvas.width = w;
-canvas.style.height = h+'px';
-canvas.style.width = w + 'px';
-
-let gl = canvas.getContext('webgl'),
+    angleY = 0,
+    h = null,
+    w = null,
+    gl = canvas.getContext('webgl'),
     loadAjax = (name) => new Promise((res, rej) => {
         let x = new XMLHttpRequest();
         x.open('GET', name, true);
@@ -30,7 +24,7 @@ let gl = canvas.getContext('webgl'),
         gl.clearColor(0.5, 0.5, 0.5, 1);
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     },
-    draw = (arrVertices, arrIndices) => gl.drawElements(
+    draw = (arrIndices) => gl.drawElements(
         gl.TRIANGLES,
         arrIndices.length,
         gl.UNSIGNED_SHORT,
@@ -78,26 +72,24 @@ let gl = canvas.getContext('webgl'),
     },
     applySettings = () => {
         gl.enable(gl.DEPTH_TEST);
-        gl.enable(gl.CULL_FACE);
-        gl.cullFace(gl.BACK);
+        //gl.enable(gl.CULL_FACE);
+        //gl.cullFace(gl.BACK);
         gl.frontFace(gl.CCW);
     },
-    enablePositionBuffer = (arrVertices) => {
-        let posVertexBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, posVertexBuffer);
+    enablePositionBuffer = (positionBuffer) => {
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer)
         let positionAttributeLocation = gl.getAttribLocation(program, 'vertPosition');
         gl.vertexAttribPointer(
-            posVertexBuffer,
+            positionAttributeLocation,
             3, gl.FLOAT,
             gl.FALSE,
             3 * Float32Array.BYTES_PER_ELEMENT,
             0
         );
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(arrVertices), gl.STATIC_DRAW);
+
         gl.enableVertexAttribArray(positionAttributeLocation);
     },
-    enableTexCoordBuffer = (arrTexCoords) => {
-        let texCoordBuffer = gl.createBuffer();
+    enableTexCoordBuffer = (texCoordBuffer) => {
         gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
         let texCoordAttributeLocation = gl.getAttribLocation(program, 'vertTexCoord');
         gl.vertexAttribPointer(
@@ -107,16 +99,9 @@ let gl = canvas.getContext('webgl'),
             2 * Float32Array.BYTES_PER_ELEMENT,
             0
         );
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(arrTexCoords), gl.STATIC_DRAW);
         gl.enableVertexAttribArray(texCoordAttributeLocation);
     },
-    enableIndexBuffer = (arrIndices) => {
-        let indexBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(arrIndices), gl.STATIC_DRAW);
-    },
-    enableNormalBuffer = (arrNormals) => {
-        let normalBuffer = gl.createBuffer();
+    enableNormalBuffer = (normalBuffer) => {
         gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
         let normalAttribLocation = gl.getAttribLocation(program, 'vertNormal');
         gl.vertexAttribPointer(
@@ -126,8 +111,10 @@ let gl = canvas.getContext('webgl'),
             3 * Float32Array.BYTES_PER_ELEMENT,
             0
         );
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(arrNormals), gl.STATIC_DRAW);
         gl.enableVertexAttribArray(normalAttribLocation);
+    },
+    enableIndexBuffer = (indexBuffer) => {
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
     },
     enableTexture = (texId) => {
         let tex = gl.createTexture();
@@ -168,8 +155,8 @@ let gl = canvas.getContext('webgl'),
             return this.mWorld;
         }
 
-        setMat4(mat4) {
-            this.mWorld = mat4;
+        setMat4(m4) {
+            this.mWorld = m4;
         }
     },
     world,
@@ -183,7 +170,7 @@ let gl = canvas.getContext('webgl'),
         gl.activeTexture(gl.TEXTURE0);
     },
     Proj = class Proj {
-        constructor(fov = T / 8, aspect = w / h, near = 0.1, far = 1000.0) {
+        constructor(fov = T / 8, aspect = w / h, near = 0.1, far = 10000.0) {
             this.fov = fov;
             this.aspect = aspect;
             this.near = near;
@@ -203,17 +190,17 @@ let gl = canvas.getContext('webgl'),
     },
     proj,
     Camera = class Camera {
-        constructor(position = [0, 0, -5], lookAt = [0, 0, 0], up = [0, 1, 0]) {
+        constructor(position = [0, -500, -500], lookAt = [1, 0, 0], up = [0, -1, 0]) {
             this.forward = vec3.create();
             this.up = vec3.create();
             this.right = vec3.create();
 
-            this.position = position;
+            this.position = vec3.fromValues(...position);
 
             this.mView = mat4.create();
 
             // get what I'm looking at from my perspective
-            vec3.subtract(this.forward, lookAt, this.position);
+            vec3.subtract(this.forward, vec3.fromValues(...lookAt), this.position);
             vec3.add(this.up, this.up, up);
 
             this.renorm();
@@ -221,7 +208,7 @@ let gl = canvas.getContext('webgl'),
             this.rotSpeed = 0.001;
             this.moveSpeed = 0.01;
             this.slowSpeed = 0.01;
-            this.fastSpeed = 0.02;
+            this.fastSpeed = 2;
         }
 
         setFast() {
@@ -336,13 +323,36 @@ let gl = canvas.getContext('webgl'),
             this.indices = arrIndices;
             this.normals = arrNormals;
             this.v4Trans = v4Trans;
+
+            //this.v4Trans = mat4.create();
+            //mat4.translate(this.v4Trans, this.v4Trans, vec3.fromValues(Math.random() * 20, Math.random() * 20, Math.random() * 20));
+
+            this.posVertexBuffer = gl.createBuffer();
+            this.texCoordBuffer = gl.createBuffer();
+            this.indexBuffer = gl.createBuffer();
+            this.normalBuffer = gl.createBuffer();
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, this.posVertexBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(arrVertices), gl.STATIC_DRAW);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, this.texCoordBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(arrTexCoords), gl.STATIC_DRAW);
+
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(arrIndices), gl.STATIC_DRAW);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, this.normalBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(arrNormals), gl.STATIC_DRAW);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
         }
 
         use() {
-            enablePositionBuffer(this.vertices);
-            enableTexCoordBuffer(this.texCoords);
-            enableIndexBuffer(this.indices);
-            enableNormalBuffer(this.normals);
+            enablePositionBuffer(this.posVertexBuffer);
+            enableTexCoordBuffer(this.texCoordBuffer);
+            enableNormalBuffer(this.normalBuffer);
+            enableIndexBuffer(this.indexBuffer);
         }
 
         getVertices() {
@@ -359,15 +369,13 @@ let gl = canvas.getContext('webgl'),
     },
     addObjects = (arr) => {
         let models = [];
-
+        console.log(arr)
         for (let child of arr.rootnode.children) {
             console.log('Adding child', child.name);
             let trans = mat4.fromValues(...child.transformation);
-            console.log(trans)
 
             if ('undefined' !== typeof child.meshes) {
                 for (let meshId of child.meshes) {
-                    console.log('Needs mesh ID', meshId);
                     let mesh = arr.meshes[meshId];
                     console.log('Adding mesh', mesh.name);
 
@@ -378,8 +386,8 @@ let gl = canvas.getContext('webgl'),
                         mesh.normals,
                         trans
                     );
-                    console.log(trans)
-                    models.push(model);
+                    if ('Circle' !== mesh.name)
+                        models.push(model);
                 }
             }
         }
@@ -391,9 +399,6 @@ let gl = canvas.getContext('webgl'),
             tex = enableTexture('texture');
 
         let models = addObjects(arr);
-
-        console.log(arr);
-
         applySettings();
 
         gl.useProgram(program);
@@ -409,13 +414,12 @@ let gl = canvas.getContext('webgl'),
             useTexture(tex);
             for (let model of models) {
                 model.use();
-                //world.setMat4(model.getMat4());
+                world.setMat4(model.getMat4());
                 refresh();
 
-                draw(model.getVertices(), model.getIndices());
+                draw(model.getIndices());
                 keycheck();
             }
-            //draw(...indsverts);
 
             requestAnimationFrame(loop);
         };
@@ -428,11 +432,57 @@ let gl = canvas.getContext('webgl'),
             pVerticesText
         ]).then((r) => createProgram(...r)).catch((err) => console.log(err));
 
+        resize();
+        events();
+    },
+    events = () => {
         window.addEventListener('keydown', keydown);
         window.addEventListener('keyup', keyup);
+        window.addEventListener('resize', resize);
         canvas.requestPointerLock = canvas.requestPointerLock || canvas.mozRequestPointerLock;
-        canvas.requestPointerLock();
+        canvas.addEventListener('click', () => {
+            canvas.requestPointerLock();
+            toggleFullScreen();
+        });
         window.addEventListener('mousemove', mousemove);
+    },
+    resize = () => {
+        h = window.innerHeight;
+        w = window.innerWidth;
+        canvas.height = h;
+        canvas.width = w;
+        canvas.style.height = h+'px';
+        canvas.style.width = w + 'px';
+        gl.viewport(0, 0, w, h);
+        if (proj) {
+            proj.aspect = w/h;
+            proj.apply();
+        }
+    },
+    toggleFullScreen = () => {
+        if (!document.fullscreenElement &&    // alternative standard method
+            !document.mozFullScreenElement && !document.webkitFullscreenElement && !document.msFullscreenElement )
+        {  // current working methods
+            if (document.documentElement.requestFullscreen) {
+                document.documentElement.requestFullscreen();
+            } else if (document.documentElement.msRequestFullscreen) {
+                document.documentElement.msRequestFullscreen();
+            } else if (document.documentElement.mozRequestFullScreen) {
+                document.documentElement.mozRequestFullScreen();
+            } else if (document.documentElement.webkitRequestFullscreen) {
+                document.documentElement.webkitRequestFullscreen(Element.ALLOW_KEYBOARD_INPUT);
+            }
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.msExitFullscreen) {
+                document.msExitFullscreen();
+            } else if (document.mozCancelFullScreen) {
+                document.mozCancelFullScreen();
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            }
+        }
     },
     keys = new Set(),
     keydown = (ev) => keys.add(ev.key.toLowerCase());
@@ -463,7 +513,8 @@ let gl = canvas.getContext('webgl'),
     mousemove = (ev) => {
         ev.movementX = ev.movementX || ev.mozMovementX;
         ev.movementY = ev.movementY || ev.mozMovementY;
-        camera.yawAndPitch(ev.movementX, ev.movementY);
+        if (camera)
+            camera.yawAndPitch(ev.movementX, ev.movementY);
     }
 
 load();
