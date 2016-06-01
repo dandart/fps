@@ -37,4 +37,8 @@ let enablePositionBuffer = (program, positionBuffer) => {
     },
     enableIndexBuffer = (program, indexBuffer) => {
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+    },
+    freeBuffers = () => {
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
     };

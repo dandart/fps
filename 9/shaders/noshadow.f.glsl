@@ -1,6 +1,5 @@
 precision mediump float;
 
-
 varying vec3 fragPosition;
 varying vec2 fragTexCoord;
 varying vec3 fragNormal;
@@ -8,8 +7,13 @@ varying vec3 fragNormal;
 uniform vec3 pointLightPosition;
 uniform vec4 meshColour;
 
+uniform sampler2D sampler;
+
 void main()
 {
+    vec4 texel = texture2D(sampler, fragTexCoord);
+
+
     float lightIntensity = 0.4 + 0.6 * max(
         dot(
             fragNormal,
@@ -19,6 +23,6 @@ void main()
         ),
         0.0
     );
-    gl_FragColor = vec4(meshColour.rgb * lightIntensity, meshColour.a);
+    gl_FragColor = vec4((texel.rgb + meshColour.rgb) * lightIntensity, meshColour.a);
 
 }

@@ -13,6 +13,7 @@ let runPrograms = (program, shadowProgram, shadowGenProgram, arrVinski1, arrTunn
 
         resize(program);
         events(program);
+        let tex = enableTexture('grass');
 
         ready = true;
         loop = () => {
@@ -23,10 +24,11 @@ let runPrograms = (program, shadowProgram, shadowGenProgram, arrVinski1, arrTunn
 
             camera.gravitateTo(0);
 
-            //useTexture(tex);
             for (let model of models) {
                 model.use(program);
-                setColour(program, model.getColour());
+                if (model.colour)
+                    setColour(program, model.getColour());
+
                 refresh(
                     program,
                     model.getMat4(),
@@ -35,6 +37,8 @@ let runPrograms = (program, shadowProgram, shadowGenProgram, arrVinski1, arrTunn
                 );
 
                 draw(model.getIndices());
+
+                model.free();
                 keycheck();
             }
 

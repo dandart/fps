@@ -1,16 +1,19 @@
 let addChild = (models, arr, child) => {
         let trans = mat4.create(),
-            colour = vec4.create();
+            colour = vec4.create(),
+            texture = null;
         mat4.identity(trans);
         // sadly the original file's translations I didn't understand
         switch(child.name) {
             case 'Thingy':
                 mat4.translate(trans, trans, mat3.fromValues(0, 10, 0));
-                colour = vec4.fromValues(0.7, 0, 0.7, 1);
+                colour = vec4.fromValues(0, 0, 0, 1);
+                texture = 'kat';
                 break;
             case 'Floor':
                 mat4.scale(trans, trans, mat3.fromValues(40, 40, 0));
-                colour = vec4.fromValues(0.6, 0.6, 0.6, 1);
+                colour = vec4.fromValues(0, 0, 0, 1);
+                texture = 'grass';
                 break;
             case 'Trunk':
                 mat4.translate(trans, trans, mat3.fromValues(3, 5, 0));
@@ -79,7 +82,8 @@ let addChild = (models, arr, child) => {
                     mesh.texturecoords?mesh.texturecoords[0]:[],
                     mesh.normals,
                     trans,
-                    colour
+                    colour,
+                    texture
                 );
                 models.push(model);
             }

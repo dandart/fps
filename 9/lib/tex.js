@@ -22,4 +22,7 @@ let enableTexture = (texId) => {
     useTexture = (tex) => {
         gl.bindTexture(gl.TEXTURE_2D, tex);
         gl.activeTexture(gl.TEXTURE0);
+    },
+    freeTexture = () => {
+        gl.bindTexture(gl.TEXTURE_2D, null);
     };
