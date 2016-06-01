@@ -8,8 +8,8 @@ let getAL = (program, name) => gl.getAttribLocation(program, name),
     setU1i = (program, name, value) => gl.uniform1i(getUL(program, name), value),
     applySettings = () => {
         gl.enable(gl.DEPTH_TEST);
-        //gl.enable(gl.CULL_FACE);
-        //gl.cullFace(gl.BACK);
+        gl.enable(gl.CULL_FACE);
+        gl.cullFace(gl.BACK);
         gl.frontFace(gl.CCW);
     },
     clear = () => {
