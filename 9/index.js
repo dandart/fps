@@ -1,7 +1,6 @@
 let T = 2 * Math.PI,
     canvas = document.querySelector('canvas'),
-    angleX = 0,
-    angleY = 0,
+    texSize = 512,
     h = null,
     w = null,
     gl = canvas.getContext('webgl'),
@@ -17,11 +16,15 @@ let T = 2 * Math.PI,
         };
         x.send();
     }),
-    pVertexText = loadAjax('vertex.v.glsl'),
-    pFragmentText = loadAjax('fragment.f.glsl'),
+    pVertexText = loadAjax('noshadow.v.glsl'),
+    pFragmentText = loadAjax('noshadow.f.glsl'),
+    pShadowVertexText = loadAjax('shadow.v.glsl'),
+    pShadowFragmentText = loadAjax('shadow.f.glsl'),
+    pShadowGenVertexText = loadAjax('shadowgen.v.glsl'),
+    pShadowGenFragmentText = loadAjax('shadowgen.f.glsl'),
     pVerticesText = loadAjax('vinski1.json'),
     clear = () => {
-        gl.clearColor(0.5, 0.5, 0.5, 1);
+        gl.clearColor(0, 0, 0, 1);
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     },
     draw = (arrIndices) => gl.drawElements(
@@ -30,7 +33,6 @@ let T = 2 * Math.PI,
         gl.UNSIGNED_SHORT,
         0
     ),
-    program,
     compileProgram = (vertexText, fragmentText) => {
         let vertexShader = gl.createShader(gl.VERTEX_SHADER),
             fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
@@ -40,12 +42,14 @@ let T = 2 * Math.PI,
 
         gl.compileShader(vertexShader);
         if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
+            console.log(vertexText);
             console.log(gl.getShaderInfoLog(vertexShader));
             throw new Error('Error compiling vertex shader');
         }
 
         gl.compileShader(fragmentShader);
         if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
+            console.log(fragmentText);
             console.log(gl.getShaderInfoLog(fragmentShader));
             throw new Error('Error compiling fragment shader');
         }
@@ -76,7 +80,7 @@ let T = 2 * Math.PI,
         //gl.cullFace(gl.BACK);
         gl.frontFace(gl.CCW);
     },
-    enablePositionBuffer = (positionBuffer) => {
+    enablePositionBuffer = (program, positionBuffer) => {
         gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer)
         let positionAttributeLocation = gl.getAttribLocation(program, 'vertPosition');
         gl.vertexAttribPointer(
@@ -89,7 +93,7 @@ let T = 2 * Math.PI,
 
         gl.enableVertexAttribArray(positionAttributeLocation);
     },
-    enableTexCoordBuffer = (texCoordBuffer) => {
+    enableTexCoordBuffer = (program, texCoordBuffer) => {
         gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
         let texCoordAttributeLocation = gl.getAttribLocation(program, 'vertTexCoord');
         gl.vertexAttribPointer(
@@ -101,7 +105,7 @@ let T = 2 * Math.PI,
         );
         gl.enableVertexAttribArray(texCoordAttributeLocation);
     },
-    enableNormalBuffer = (normalBuffer) => {
+    enableNormalBuffer = (program, normalBuffer) => {
         gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
         let normalAttribLocation = gl.getAttribLocation(program, 'vertNormal');
         gl.vertexAttribPointer(
@@ -113,7 +117,7 @@ let T = 2 * Math.PI,
         );
         gl.enableVertexAttribArray(normalAttribLocation);
     },
-    enableIndexBuffer = (indexBuffer) => {
+    enableIndexBuffer = (program, indexBuffer) => {
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
     },
     enableTexture = (texId) => {
@@ -137,40 +141,42 @@ let T = 2 * Math.PI,
         gl.bindTexture(gl.TEXTURE_2D, null);
         return tex;
     },
-    getUL = (name) => gl.getUniformLocation(program, name),
-    setUM4fv = (name, value) => gl.uniformMatrix4fv(getUL(name), gl.FALSE, value),
-    setU3f = (name, x, y, z) => gl.uniform3f(getUL(name), x, y, z),
+    getUL = (program, name) => gl.getUniformLocation(program, name),
+    setUM4fv = (program, name, value) => gl.uniformMatrix4fv(getUL(program, name), gl.FALSE, value),
+    setU3f = (program, name, x, y, z) => gl.uniform3f(getUL(program, name), x, y, z),
+    setU2fv = (program, name, value) => gl.uniform2fv(getUL(program, name), value),
+    setU3fv = (program, name, value) => gl.uniform3fv(getUL(program, name), value),
+    setU4fv = (program, name, value) => gl.uniform4fv(getUL(program, name), value),
+    setU1i = (program, name, value) => gl.uniform1i(getUL(program, name), value),
     World = class World {
-        constructor() {
+        constructor(program) {
+            this.program = program;
             this.mWorld = mat4.create();
             mat4.identity(this.mWorld);
-        }
-
-        rotate() {
-            mat4.rotate(this.mWorld, this.mWorld, 0.01, [0, 1, 0]);
-            refresh();
         }
 
         getMat4() {
             return this.mWorld;
         }
-
-        setMat4(m4) {
-            this.mWorld = m4;
-        }
     },
     world,
-    enableLights = () => {
-        setU3f('ambientLightIntensity', 0.2, 0.2, 0.2);
-        setU3f('sun.direction', 3.0, 4.0, -2.0);
-        setU3f('sun.intensity', 0.9, 0.9, 0.9);
+    pointLightPosition = vec3.fromValues(0, 5, 5),
+    enableLights = (program) => {
+        //setU3f('ambientLightIntensity', 0.2, 0.2, 0.2);
+        //setU3f('sun.direction', 3.0, 4.0, -2.0);
+        //setU3f('sun.intensity', 0.9, 0.9, 0.9);
+        setU3fv(program, 'pointLightPosition', pointLightPosition);
+    },
+    setColour = (program, colour) => {
+        setU4fv(program, 'meshColour', colour);
     },
     useTexture = (tex) => {
         gl.bindTexture(gl.TEXTURE_2D, tex);
         gl.activeTexture(gl.TEXTURE0);
     },
     Proj = class Proj {
-        constructor(fov = T / 8, aspect = w / h, near = 0.1, far = 10000.0) {
+        constructor(program, fov = T / 8, aspect = w / h, near = 0.1, far = 10000.0) {
+            this.program = program;
             this.fov = fov;
             this.aspect = aspect;
             this.near = near;
@@ -181,7 +187,13 @@ let T = 2 * Math.PI,
 
         apply() {
             mat4.perspective(this.mProj, this.fov, this.aspect, this.near, this.far);
-            refresh();
+            if (world && camera)
+                refresh(
+                    this.program,
+                    world.getMat4(),
+                    camera.getMat4(),
+                    this.mProj
+                );
         }
 
         getMat4() {
@@ -190,7 +202,8 @@ let T = 2 * Math.PI,
     },
     proj,
     Camera = class Camera {
-        constructor(position = [0, -500, -500], lookAt = [1, 0, 0], up = [0, -1, 0]) {
+        constructor(program, position = [15, 0, 2], lookAt = [0, 0, 1], up = [-1, 0, 0]) {
+            this.program = program;
             this.forward = vec3.create();
             this.up = vec3.create();
             this.right = vec3.create();
@@ -208,7 +221,7 @@ let T = 2 * Math.PI,
             this.rotSpeed = 0.001;
             this.moveSpeed = 0.01;
             this.slowSpeed = 0.01;
-            this.fastSpeed = 2;
+            this.fastSpeed = 0.02;
         }
 
         setFast() {
@@ -257,7 +270,7 @@ let T = 2 * Math.PI,
 
         yawLeft() {
             let mRight = mat4.create();
-            mat4.rotate(mRight, mRight, this.rotSpeed, vec3.fromValues(0, 1, 0));
+            mat4.rotate(mRight, mRight, this.rotSpeed, vec3.fromValues(0, 0, 1));
             vec3.transformMat4(this.forward, this.forward, mRight);
             this.renorm();
             this.apply();
@@ -265,64 +278,74 @@ let T = 2 * Math.PI,
 
         yawRight() {
             let mRight = mat4.create();
-            mat4.rotate(mRight, mRight, -this.rotSpeed, vec3.fromValues(0, 1, 0));
+            mat4.rotate(mRight, mRight, -this.rotSpeed, vec3.fromValues(0, 0, 1));
             vec3.transformMat4(this.forward, this.forward, mRight);
             this.renorm();
             this.apply();
         }
 
         pitchUp() {
-            let mUp = mat4.create();
-            mat4.rotate(mUp, mUp, -this.rotSpeed, vec3.fromValues(1, 0, 0));
-            vec3.transformMat4(this.forward, this.forward, mUp);
+            //let mUp = mat4.create();
+            //mat4.rotate(mUp, mUp, -this.rotSpeed, vec3.fromValues(1, 0, 0));
+            //vec3.transformMat4(this.forward, this.forward, mUp);
             this.renorm();
             this.apply();
         }
 
         pitchDown() {
-            let mUp = mat4.create();
-            mat4.rotate(mUp, mUp, this.rotSpeed, vec3.fromValues(1, 0, 0));
-            vec3.transformMat4(this.forward, this.forward, mUp);
+            //let mUp = mat4.create();
+            //mat4.rotate(mUp, mUp, this.rotSpeed, vec3.fromValues(1, 0, 0));
+            //vec3.transformMat4(this.forward, this.forward, mUp);
             this.renorm();
             this.apply();
         }
 
         yawAndPitch(x, y) {
             let mRot = mat4.create();
-            mat4.rotate(mRot, mRot, -this.rotSpeed * x, vec3.fromValues(0, 1, 0));
-            mat4.rotate(mRot, mRot, this.rotSpeed * y, vec3.fromValues(1, 0, 0));
+            mat4.rotate(mRot, mRot, -this.rotSpeed * x, vec3.fromValues(0, 0, 1));
+            //mat4.rotate(mRot, mRot, this.rotSpeed * y, vec3.fromValues(1, 0, 0));
             vec3.transformMat4(this.forward, this.forward, mRot);
             this.renorm();
             this.apply();
         }
 
         apply() {
-            refresh();
+            refresh(
+                this.program,
+                world.getMat4(),
+                camera.getMat4(),
+                proj.getMat4()
+            );
         }
     },
     camera,
     ready,
-    refresh = () => {
-        if (!ready) return;
+    refresh = (program, mWorld, mView, mProj) => {
+        //if (!ready) return;
+        gl.useProgram(program);
         let mPos = mat4.create();
         mat4.identity(mPos);
-        setUM4fv('mWorld', world.getMat4());
+        setUM4fv(program, 'mWorld', mWorld);
         //setUM4fv('mView', camera.getMat4());
         //setUM4fv('mProj', proj.getMat4());
 
-        mat4.multiply(mPos, world.getMat4(), mPos);
-        mat4.multiply(mPos, camera.getMat4(), mPos);
-        mat4.multiply(mPos, proj.getMat4(), mPos);
-        setUM4fv('mPos', mPos);
+        mat4.multiply(mPos, mWorld, mPos);
+        mat4.multiply(mPos, mView, mPos);
+        mat4.multiply(mPos, mProj, mPos);
+        setUM4fv(program, 'mPos', mPos);
+
         return mPos;
     },
     Model = class Model {
-        constructor(arrVertices, arrIndices, arrTexCoords, arrNormals, v4Trans) {
+        constructor(name, arrVertices, arrIndices, arrTexCoords, arrNormals, v4Trans, colour) {
             this.vertices = arrVertices;
             this.texCoords = arrTexCoords;
             this.indices = arrIndices;
             this.normals = arrNormals;
             this.v4Trans = v4Trans;
+            this.colour = colour;
+
+            //mat4.invert(this.v4Trans, this.v4Trans);
 
             //this.v4Trans = mat4.create();
             //mat4.translate(this.v4Trans, this.v4Trans, vec3.fromValues(Math.random() * 20, Math.random() * 20, Math.random() * 20));
@@ -348,11 +371,14 @@ let T = 2 * Math.PI,
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
         }
 
-        use() {
-            enablePositionBuffer(this.posVertexBuffer);
-            enableTexCoordBuffer(this.texCoordBuffer);
-            enableNormalBuffer(this.normalBuffer);
-            enableIndexBuffer(this.indexBuffer);
+        use(program, onlyShadows) {
+            gl.useProgram(program);
+            enablePositionBuffer(program, this.posVertexBuffer);
+            enableIndexBuffer(program, this.indexBuffer);
+            if (!onlyShadows) {
+                //enableTexCoordBuffer(program, this.texCoordBuffer);
+                enableNormalBuffer(program, this.normalBuffer);
+            }
         }
 
         getVertices() {
@@ -366,56 +392,299 @@ let T = 2 * Math.PI,
         getMat4() {
             return this.v4Trans;
         }
+
+        getColour() {
+            return this.colour;
+        }
     },
+    addChild = (models, arr, child) => {
+        let trans = mat4.create(),
+            colour = vec4.create();
+        mat4.identity(trans);
+        // sadly the original file's translations I didn't understand
+        switch(child.name) {
+            case 'Thingy':
+                colour = vec4.fromValues(0.7, 0, 0.7, 1);
+                break;
+            case 'Floor':
+                mat4.scale(trans, trans, mat3.fromValues(40, 40, 0));
+                colour = vec4.fromValues(0.6, 0.6, 0.6, 1);
+                break;
+            case 'Trunk':
+                mat4.translate(trans, trans, mat3.fromValues(3, 5, 0));
+                colour = vec4.fromValues(0.5, 0.5, 0.1, 1);
+                break;
+            case 'Trunk.001':
+                mat4.translate(trans, trans, mat3.fromValues(3, -5, 0));
+                colour = vec4.fromValues(0.5, 0.5, 0.1, 1);
+                break;
+            case 'Trunk.002':
+                mat4.translate(trans, trans, mat3.fromValues(-6, 5, 0));
+                colour = vec4.fromValues(0.5, 0.5, 0.1, 1);
+                break;
+            case 'Trunk.003':
+                mat4.translate(trans, trans, mat3.fromValues(-6, -5, 0));
+                colour = vec4.fromValues(0.5, 0.5, 0.1, 1);
+                break;
+            case 'Tree':
+                mat4.scale(trans, trans, mat3.fromValues(3, 3, 3));
+                mat4.translate(trans, trans, mat3.fromValues(2/3, 5/3, 8/3));
+                colour = vec4.fromValues(0, 0.5, 0, 1);
+                break;
+            case 'Tree.001':
+                mat4.scale(trans, trans, mat3.fromValues(2.5, 2.5, 2.5));
+                mat4.translate(trans, trans, mat3.fromValues(3/3, -5/3, 8/3));
+                colour = vec4.fromValues(0, 0.5, 0, 1);
+                break;
+            case 'Tree.002':
+                mat4.scale(trans, trans, mat3.fromValues(2.5, 2.5, 2.5));
+                mat4.translate(trans, trans, mat3.fromValues(-6/3, 5/3, 8/3));
+                colour = vec4.fromValues(0, 0.5, 0, 1);
+                break;
+            case 'Tree.003':
+                mat4.scale(trans, trans, mat3.fromValues(2.5, 2.5, 2.5));
+                mat4.translate(trans, trans, mat3.fromValues(-6/3, -5/3, 8/3));
+                colour = vec4.fromValues(0, 0.5, 0, 1);
+                break;
+            default:
+        }
+
+        if ('undefined' !== typeof child.meshes) {
+            for (let meshId of child.meshes) {
+                let mesh = arr.meshes[meshId];
+
+                let model = new Model(
+                    child.name,
+                    mesh.vertices,
+                    [].concat.apply([], mesh.faces),
+                    mesh.texturecoords[0],
+                    mesh.normals,
+                    trans,
+                    colour
+                );
+                models.push(model);
+            }
+        }
+
+        if ('undefined' !== typeof child.children) {
+            for (let child2 of child.children) {
+                addChild(models, arr, child2);
+            }
+        }
+    }
     addObjects = (arr) => {
         let models = [];
         console.log(arr)
         for (let child of arr.rootnode.children) {
-            console.log('Adding child', child.name);
-            let trans = mat4.fromValues(...child.transformation);
-
-            if ('undefined' !== typeof child.meshes) {
-                for (let meshId of child.meshes) {
-                    let mesh = arr.meshes[meshId];
-                    console.log('Adding mesh', mesh.name);
-
-                    let model = new Model(
-                        mesh.vertices,
-                        [].concat.apply([], mesh.faces),
-                        mesh.texturecoords[0],
-                        mesh.normals,
-                        trans
-                    );
-                    if ('Circle' !== mesh.name)
-                        models.push(model);
-                }
-            }
+            addChild(models, arr, child);
         }
         return models;
     },
-    createProgram = (vertexText, fragmentText, verticesText) => {
+    enableTextureFrameBuffers = (shadowGenProgram, models) => {
+        gl.useProgram(shadowGenProgram);
+        let shadowMapCube = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_CUBE_MAP, shadowMapCube);
+        gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.MIRRORED_REPEAT);
+        gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT);
+
+        let shadowMapCameras = [
+            new Camera(
+                shadowGenProgram,
+                pointLightPosition,
+                vec3.add(
+                    vec3.create(),
+                    pointLightPosition,
+                    vec3.fromValues(1, 0, 0),
+                    vec3.fromValues(0, -1, 0)
+                )
+            ),
+            new Camera(
+                shadowGenProgram,
+                pointLightPosition,
+                vec3.add(
+                    vec3.create(),
+                    pointLightPosition,
+                    vec3.fromValues(-1, 0, 0),
+                    vec3.fromValues(0, -1, 0)
+                )
+            ),
+            new Camera(
+                shadowGenProgram,
+                pointLightPosition,
+                vec3.add(
+                    vec3.create(),
+                    pointLightPosition,
+                    vec3.fromValues(0, 1, 0),
+                    vec3.fromValues(0, 0, 1)
+                )
+            ),
+            new Camera(
+                shadowGenProgram,
+                pointLightPosition,
+                vec3.add(
+                    vec3.create(),
+                    pointLightPosition,
+                    vec3.fromValues(0, -1, 0),
+                    vec3.fromValues(0, 0, -1)
+                )
+            ),
+            new Camera(
+                shadowGenProgram,
+                pointLightPosition,
+                vec3.add(
+                    vec3.create(),
+                    pointLightPosition,
+                    vec3.fromValues(0, 0, 1),
+                    vec3.fromValues(0, -1, 0)
+                )
+            ),
+            new Camera(
+                shadowGenProgram,
+                pointLightPosition,
+                vec3.add(
+                    vec3.create(),
+                    pointLightPosition,
+                    vec3.fromValues(0, 0, -1),
+                    vec3.fromValues(0, -1, 0)
+                )
+            )
+        ];
+
+        let shadowMapProj = mat4.create(),
+            shadowClipNearFar = vec2.fromValues(0.05, 15.0);
+        mat4.perspective(
+            shadowMapProj,
+            T/4,
+            1.0,
+            shadowClipNearFar[0],
+            shadowClipNearFar[1]
+        );
+
+        setU2fv(shadowGenProgram, 'shadowClipNearFar', shadowClipNearFar);
+        setU3fv(shadowGenProgram, 'pointLightPosition', pointLightPosition);
+
+        gl.enable(gl.DEPTH_TEST);
+        gl.enable(gl.CULL_FACE);
+        gl.viewport(0, 0, texSize, texSize);
+
+        // -x +y -y +z -z are constants just after
+        for (let i = 0; i < 6; i++) {
+            gl.texImage2D(
+                gl.TEXTURE_CUBE_MAP_POSITIVE_X + i,
+                0, gl.RGBA,
+                texSize, texSize,
+                0, gl.RGBA,
+                gl.UNSIGNED_BYTE,
+                null
+            );
+
+            let shadowMapFrameBuffer = gl.createFramebuffer();
+
+            gl.bindFramebuffer(gl.FRAMEBUFFER, shadowMapFrameBuffer);
+
+            let shadowMapDepthBuffer = gl.createRenderbuffer();
+
+            gl.bindRenderbuffer(gl.RENDERBUFFER, shadowMapDepthBuffer);
+
+            gl.renderbufferStorage(
+                gl.RENDERBUFFER,
+                gl.DEPTH_COMPONENT16,
+                texSize,
+                texSize
+            );
+            //setU4fv(shadowGenProgram, 'mProj', shadowMapProj);
+
+            //setUM4fv(shadowGenProgram, 'mView', shadowMapCameras[i].getMat4());
+            gl.framebufferTexture2D(
+                gl.FRAMEBUFFER,
+                gl.COLOR_ATTACHMENT0,
+                gl.TEXTURE_CUBE_MAP_POSITIVE_X + i,
+                shadowMapCube,
+                0
+            );
+
+            gl.framebufferRenderbuffer(
+                gl.FRAMEBUFFER,
+                gl.DEPTH_ATTACHMENT,
+                gl.RENDERBUFFER,
+                shadowMapDepthBuffer
+            );
+
+            gl.clearColor(1, 1, 1, 1);
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+            for (let model of models) {
+                model.use(shadowGenProgram, true);
+                refresh(
+                    shadowGenProgram,
+                    model.getMat4(),
+                    shadowMapCameras[i].getMat4(),
+                    shadowMapProj
+                );
+
+                draw(model.getIndices());
+            }
+        }
+
+        gl.viewport(0, 0, w, h);
+
+        gl.bindTexture(gl.TEXTURE_CUBE_MAP, null);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+
+        return shadowMapCube;
+    },
+    useShadowMap = (shadowProgram, shadowMapCube) => {
+        gl.useProgram(shadowProgram);
+        setU1i(shadowProgram, 'lightShadowMap', 0);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_CUBE_MAP, shadowMapCube)
+    },
+    createPrograms = (
+        vertexText,
+        fragmentText,
+        shadowVertexText,
+        shadowFragmentText,
+        shadowGenVertexText,
+        shadowGenFragmentText,
+        verticesText
+    ) => {
         let arr = JSON.parse(verticesText),
             program = compileProgram(vertexText, fragmentText),
-            tex = enableTexture('texture');
+            shadowProgram = compileProgram(shadowVertexText, shadowFragmentText),
+            shadowGenProgram = compileProgram(shadowGenVertexText, shadowGenFragmentText);
+            //tex = enableTexture('texture');
 
         let models = addObjects(arr);
         applySettings();
+        gl.useProgram(shadowProgram);
+        camera = new Camera(shadowProgram);
 
-        gl.useProgram(program);
-        camera = new Camera();
-        proj = new Proj();
-        world = new World();
-        enableLights();
+        let shadowMapCube = enableTextureFrameBuffers(shadowGenProgram, models);
+
+        gl.useProgram(shadowProgram);
+        proj = new Proj(shadowProgram);
+        world = new World(shadowProgram);
+        enableLights(shadowProgram);
+
+
         ready = true;
-        refresh();
-
         loop = () => {
             clear();
-            useTexture(tex);
+            gl.useProgram(shadowProgram);
+            useShadowMap(shadowProgram, shadowMapCube);
+            //useTexture(tex);
             for (let model of models) {
-                model.use();
-                world.setMat4(model.getMat4());
-                refresh();
+                model.use(shadowProgram, false);
+                setColour(shadowProgram, model.getColour());
+                refresh(
+                    shadowProgram,
+                    model.getMat4(),
+                    camera.getMat4(),
+                    proj.getMat4()
+                );
 
                 draw(model.getIndices());
                 keycheck();
@@ -429,8 +698,12 @@ let T = 2 * Math.PI,
         Promise.all([
             pVertexText,
             pFragmentText,
+            pShadowVertexText,
+            pShadowFragmentText,
+            pShadowGenVertexText,
+            pShadowGenFragmentText,
             pVerticesText
-        ]).then((r) => createProgram(...r)).catch((err) => console.log(err));
+        ]).then((r) => createPrograms(...r)).catch((err) => console.log(err));
 
         resize();
         events();
@@ -438,13 +711,15 @@ let T = 2 * Math.PI,
     events = () => {
         window.addEventListener('keydown', keydown);
         window.addEventListener('keyup', keyup);
+        window.addEventListener('keypress', keypress);
         window.addEventListener('resize', resize);
         canvas.requestPointerLock = canvas.requestPointerLock || canvas.mozRequestPointerLock;
-        canvas.addEventListener('click', () => {
-            canvas.requestPointerLock();
-            toggleFullScreen();
-        });
         window.addEventListener('mousemove', mousemove);
+    },
+    goFull = () => {
+        if (canvas)
+            canvas.requestPointerLock();
+        toggleFullScreen();
     },
     resize = () => {
         h = window.innerHeight;
@@ -485,8 +760,12 @@ let T = 2 * Math.PI,
         }
     },
     keys = new Set(),
-    keydown = (ev) => keys.add(ev.key.toLowerCase());
-    keyup = (ev) => keys.delete(ev.key.toLowerCase());
+    keydown = (ev) => keys.add(ev.key.toLowerCase()),
+    keyup = (ev) => keys.delete(ev.key.toLowerCase()),
+    keypress = (ev) => {
+        if ('f' == ev.key.toLowerCase())
+            goFull();
+    },
     keycheck = () => {
         if (keys.has('shift'))
             camera.setFast();
@@ -508,7 +787,7 @@ let T = 2 * Math.PI,
         if (keys.has('arrowleft') && !keys.has('arrowright'))
             camera.yawLeft();
         if (keys.has('arrowright') && !keys.has('arrowleft'))
-            camera.yawRight()
+            camera.yawRight();
     };
     mousemove = (ev) => {
         ev.movementX = ev.movementX || ev.mozMovementX;

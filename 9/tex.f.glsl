@@ -6,6 +6,7 @@ struct DirectionalLight
     vec3 intensity;
 };
 
+varying vec3 fragPosition;
 varying vec2 fragTexCoord;
 varying vec3 fragNormal;
 
