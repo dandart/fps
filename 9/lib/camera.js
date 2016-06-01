@@ -1,5 +1,5 @@
 class Camera {
-    constructor(program, position = [15, 0, 2], lookAt = [0, 0, 1], up = [-1, 0, 0]) {
+    constructor(program, position = [0, 0, 2], lookAt = [-10000, 0, 1], up = [0, 0, 1]) {
         this.program = program;
         this.forward = vec3.create();
         this.up = vec3.create();
@@ -10,7 +10,9 @@ class Camera {
         this.mView = mat4.create();
 
         // get what I'm looking at from my perspective
-        vec3.subtract(this.forward, vec3.fromValues(...lookAt), this.position);
+        this.lookAt = vec3.fromValues(...lookAt);
+        //vec3.normalize(this.lookAt, this.lookAt);
+        vec3.subtract(this.forward, this.lookAt, this.position);
         vec3.add(this.up, this.up, up);
 
         this.renorm();
@@ -67,7 +69,7 @@ class Camera {
 
     yawLeft() {
         let mRight = mat4.create();
-        mat4.rotate(mRight, mRight, this.rotSpeed, vec3.fromValues(0, 0, 1));
+        mat4.rotate(mRight, mRight, this.rotSpeed, this.up);
         vec3.transformMat4(this.forward, this.forward, mRight);
         this.renorm();
         this.apply();
@@ -75,7 +77,7 @@ class Camera {
 
     yawRight() {
         let mRight = mat4.create();
-        mat4.rotate(mRight, mRight, -this.rotSpeed, vec3.fromValues(0, 0, 1));
+        mat4.rotate(mRight, mRight, -this.rotSpeed, this.up);
         vec3.transformMat4(this.forward, this.forward, mRight);
         this.renorm();
         this.apply();
@@ -99,11 +101,11 @@ class Camera {
 
     yawAndPitch(x, y) {
         let mRot = mat4.create();
-        mat4.rotate(mRot, mRot, -this.rotSpeed * x, vec3.fromValues(0, 0, 1));
+        mat4.rotate(mRot, mRot, -this.rotSpeed * x, this.up);
         let mRot2 = mat4.create();
-        mat4.rotate(mRot2, mRot2, -this.rotSpeed * y, vec3.fromValues(0, 1, 0));
+        mat4.rotate(mRot2, mRot2, -this.rotSpeed * y, this.right);
         vec3.transformMat4(this.forward, this.forward, mRot);
-        vec3.transformMat4(this.forward, this.forward, mRot2);
+        //vec3.transformMat4(this.forward, this.forward, mRot2);
 
         debug.innerHTML = 'F '+this.forward.map((v) => Math.floor(v*360/T)).join(',') +
             '<br/>U '+this.up.map((v) => Math.floor(v*360/T)).join(',') +
