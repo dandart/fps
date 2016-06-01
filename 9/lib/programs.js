@@ -21,6 +21,8 @@ let runPrograms = (program, shadowProgram, shadowGenProgram, arrVinski1, arrTunn
             vec3.rotateY(pointLightPosition, pointLightPosition, vec3.fromValues(0, 2, 0), 0.01);
             enableLights(program);
 
+            camera.gravitateTo(0);
+
             //useTexture(tex);
             for (let model of models) {
                 model.use(program);

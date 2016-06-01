@@ -3,6 +3,7 @@ const
     canvas                  = document.querySelector('canvas'),
     debug                   = document.querySelector('.debug'),
     texSize                 = 512,
+    eyeHeight               = 2,
     gl                      = canvas.getContext('webgl'),
     pVertexText             = loadAjax('shaders/noshadow.v.glsl'),
     pFragmentText           = loadAjax('shaders/noshadow.f.glsl'),

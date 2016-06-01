@@ -1,5 +1,5 @@
 class Camera {
-    constructor(program, position = [0, 0, 2], lookAt = [-10000, 0, 1], up = [0, 0, 1]) {
+    constructor(program, position = [15, 0, eyeHeight], lookAt = [-10000, 0, eyeHeight], up = [0, 0, 1]) {
         this.program = program;
         this.forward = vec3.create();
         this.up = vec3.create();
@@ -45,6 +45,15 @@ class Camera {
         vec3.add(lookAt, this.position, this.forward);
         mat4.lookAt(this.mView, this.position, lookAt, this.up);
         return this.mView;
+    }
+
+    jump() {
+        vec3.scaleAndAdd(this.position, this.position, this.up, this.moveSpeed);
+    }
+
+    gravitateTo(z) {
+        if (this.position[2] <= eyeHeight) return;
+        vec3.scaleAndAdd(this.position, this.position, this.up, -this.moveSpeed * 5);
     }
 
     moveForward() {

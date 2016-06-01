@@ -59,6 +59,8 @@ let events = (program) => {
             camera.yawLeft();
         if (keys.has('arrowright') && !keys.has('arrowleft'))
             camera.yawRight();
+        if (keys.has(' '))
+            camera.jump();
     },
     mousemove = (ev) => {
         ev.movementX = ev.movementX || ev.mozMovementX;
